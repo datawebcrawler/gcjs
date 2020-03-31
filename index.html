@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+    <title>Trabalho de Geometria Computacional - Rodrigo/Bento </title>
+    <script type="text/javascript" src="./libs/three.js"></script>
+    <script type="text/javascript" src="./libs/STLLoader.js"></script>
+
+    <script type="text/javascript" src="./libs/stats.js"></script>
+    <script type="text/javascript" src="./libs/dat.gui.js"></script>
+    <script type="text/javascript" src="./libs/ConvexGeometry.js"></script>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+        }
+    </style>
+</head>
+<body>
+
+<div id="Stats-output">
+</div>
+<div id="WebGL-output">
+</div>
+
+<script type="text/javascript">
+
+    function init() {
+
+        var step = 0;
+        var rotation = 0;
+        var clock = new THREE.Clock();
+        var time = 0;
+
+        var stats = initStats();
+        var scene = new THREE.Scene();
+        var camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 1, 1000);
+
+        var webGLRenderer = new THREE.WebGLRenderer();
+        webGLRenderer.setClearColor(new THREE.Color(0x000, 1.0));
+        webGLRenderer.setSize(window.innerWidth, window.innerHeight);
+
+        var axes = new THREE.AxisHelper(45);
+        scene.add(axes);
+
+        camera.position.x = 100;
+        camera.position.y = 100;
+        camera.position.z = 100;
+        camera.lookAt(new THREE.Vector3(0, 0, 0));
+
+        document.getElementById("WebGL-output").appendChild(webGLRenderer.domElement);
+
+        var controls = new function () {
+            this.visibleConvex = false;
+            this.visibleSpaceShip = true;
+            this.visibleSat = true;
+            this.playAnimation = true;
+            this.visibleAxes = false;
+            this.redraw = function () {
+                // todo
+            };
+        };
+
+        var gui = new dat.GUI();
+        gui.add(controls, 'redraw');
+        gui.add(controls, 'visibleConvex');
+        gui.add(controls, 'visibleSpaceShip');
+        gui.add(controls, 'visibleSat');
+        gui.add(controls, 'playAnimation');
+        gui.add(controls, 'visibleAxes');
+
+        var loader = new THREE.STLLoader();
+        var group = new THREE.Object3D();
+        var spGroup = new THREE.Object3D();
+        var hullMesh = new THREE.Object3D();
+        var hullMeshGroup = new THREE.Object3D();
+        var sphere = null;
+
+        var groupSat = new THREE.Object3D();
+        var spGroupSat = new THREE.Object3D();
+        var hullMeshSat = new THREE.Object3D();
+
+        // Carrega os objetos ***************************************************************************************
+        createSphere();
+
+        loadObj("./models/MySatSimple.stl", groupSat, spGroupSat, -30, 0x00ff00, 0xFF8000);
+        loadObj("./models/SpaceShip3.stl", group, spGroup, 30, 0xff0000, 0x7777ff);
+
+        function loadObj(path, g, sp, r, cp, cw) {
+            loader.load(path, function (geometry) {
+                var mat = new THREE.MeshBasicMaterial({color: cw, wireframe: true});
+                var mesh = new THREE.Mesh(geometry, mat);
+                mesh.rotation.x = -0.5 * Math.PI;
+                mesh.position.x = r;
+                g.add(mesh);
+                scene.add(g);
+                var points = [];
+                var material = new THREE.MeshBasicMaterial({color: cp, transparent: true});
+                geometry.vertices.forEach(function (point) {
+                    var spGeom = new THREE.SphereGeometry(0.1);
+                    var spMesh = new THREE.Mesh(spGeom, material);
+
+                    if (points.length == 0) {
+                        points.push(point);
+                    } else {
+                        let achou = false;
+                        for (var i = 0; i < points.length; ++i) {
+                            let p = points[i];
+                            achou = p.x == point.x && p.y == point.y && p.z == point.z;
+                            if(achou) {
+                                break;
+                            }
+                        }
+                        if(!achou) {
+                            points.push(point);
+                            spMesh.position.copy(point);
+                        }
+                    }
+                    sp.add(spMesh);
+                });
+
+                sp.rotation.x = -0.5 * Math.PI;
+                sp.position.x = r;
+                scene.add(sp);
+                createHull(points, r);
+                render();
+            });
+        }
+
+
+        function createHull(points, r) {
+            var hullGeometry = new THREE.ConvexGeometry(points);
+            var meshMaterial = new THREE.MeshBasicMaterial({color: 0x00BFFF, transparent: false, opacity: 1});
+            meshMaterial.side = THREE.DoubleSide;
+            var wireFrameMat = new THREE.MeshBasicMaterial();
+            wireFrameMat.wireframe = true;
+
+            var hm = THREE.SceneUtils.createMultiMaterialObject(hullGeometry, [meshMaterial, wireFrameMat]);
+            hm.rotation.x = -0.5 * Math.PI;
+            hm.position.x = r;
+            hullMeshGroup.add(hm)
+            scene.add(hullMeshGroup);
+        }
+
+        function createSphere() {
+            var sphereGeometry = new THREE.SphereGeometry(15, 15, 15);
+            var sphereMaterial = new THREE.MeshBasicMaterial({color: 0xf1F71f, wireframe: true});
+            sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
+            scene.add(sphere);
+        }
+
+        function createPlanet() {
+            var moonMat =  new THREE.MeshLambertMaterial ({
+                color: 0x7777ff,
+                wireframe: false,
+                shading:THREE.FlatShading
+            });
+
+            var moonGeometry = new THREE.IcosahedronGeometry(20, 1 );
+            moon = new THREE.Mesh(moonGeometry, moonMat);
+            return moon;
+        }
+
+        function initStats() {
+
+            var stats = new Stats();
+            stats.setMode(0); // 0: fps, 1: ms
+
+            // Align top-left
+            stats.domElement.style.position = 'absolute';
+            stats.domElement.style.left = '0px';
+            stats.domElement.style.top = '0px';
+
+            document.getElementById("Stats-output").appendChild(stats.domElement);
+
+            return stats;
+        }
+
+        function render() {
+            rotation += 0.005;
+            stats.update();
+
+            camera.position.x = Math.sin(rotation) * 25;
+            camera.position.z = Math.cos(rotation) * 25;
+            camera.lookAt(scene.position);
+
+            if(controls.playAnimation) {
+                if (spGroup ) {
+                    spGroup.rotation.y += 0.005;
+                    spGroup.rotation.x += 0.005;
+                }
+
+                if (spGroupSat ) {
+                    spGroupSat.rotation.y += 0.005;
+                    spGroupSat.rotation.x += 0.005;
+                }
+
+                if (hullMeshGroup) {
+                    hullMeshGroup.visible = controls.visibleConvex;
+
+                    hullMeshGroup.children.forEach(function(o) {
+                        o.rotation.y += 0.005;
+                        o.rotation.x += 0.005;
+                    });
+                }
+
+                if (group ) {
+                    group.visible = controls.visibleSpaceShip;
+                    group.children.forEach(function(o){
+                        o.rotation.y += 0.005;
+                        o.rotation.x += 0.005;
+                    });
+                }
+
+                if (groupSat ) {
+                    groupSat.visible = controls.visibleSat;
+                    groupSat.children.forEach(function(o){
+                        o.rotation.y += 0.005;
+                        o.rotation.x += 0.005;
+                    });
+                }
+
+                if (sphere ) {
+                  var delta = clock.getDelta();
+                  sphere.rotation.x += 0.5 * delta;
+                  sphere.rotation.y += 0.5 * delta;
+                  
+                  var time = clock.getElapsedTime() * 2;
+                  sphere.position.x = Math.cos( time ) * 2;
+                  sphere.position.y = Math.sin( time ) * 2 - 0.4;
+
+              }
+          }
+          axes.visible = controls.visibleAxes;
+            requestAnimationFrame(render);
+            webGLRenderer.render(scene, camera);
+        }
+    }
+    window.onload = init;
+</script>
+</body>
+</html>
