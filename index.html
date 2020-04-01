@@ -35,7 +35,7 @@
 
         var stats = initStats();
         var scene = new THREE.Scene();
-        var camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 1, 1000);
+        var camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
 
         var webGLRenderer = new THREE.WebGLRenderer();
         webGLRenderer.setClearColor(new THREE.Color(0x000, 1.0));
@@ -52,34 +52,37 @@
         document.getElementById("WebGL-output").appendChild(webGLRenderer.domElement);
 
         var controls = new function () {
+            this.wireframe = true;
+            this.vertices = false;
             this.visibleConvex = false;
             this.visibleSpaceShip = true;
             this.visibleSat = true;
             this.playAnimation = true;
             this.visibleAxes = false;
+            this.luz = true;
             this.redraw = function () {
                 // todo
             };
         };
 
         var gui = new dat.GUI();
-        gui.add(controls, 'redraw');
+        gui.add(controls, 'wireframe');
+        gui.add(controls, 'vertices');
         gui.add(controls, 'visibleConvex');
         gui.add(controls, 'visibleSpaceShip');
         gui.add(controls, 'visibleSat');
         gui.add(controls, 'playAnimation');
         gui.add(controls, 'visibleAxes');
+        gui.add(controls, 'luz');
 
         var loader = new THREE.STLLoader();
         var group = new THREE.Object3D();
         var spGroup = new THREE.Object3D();
-        var hullMesh = new THREE.Object3D();
         var hullMeshGroup = new THREE.Object3D();
         var sphere = null;
 
         var groupSat = new THREE.Object3D();
         var spGroupSat = new THREE.Object3D();
-        var hullMeshSat = new THREE.Object3D();
 
         // Carrega os objetos ***************************************************************************************
         createSphere();
@@ -89,7 +92,7 @@
 
         function loadObj(path, g, sp, r, cp, cw) {
             loader.load(path, function (geometry) {
-                var mat = new THREE.MeshBasicMaterial({color: cw, wireframe: true});
+                var mat = new THREE.MeshLambertMaterial({color: cw, wireframe: controls.wireframe});
                 var mesh = new THREE.Mesh(geometry, mat);
                 mesh.rotation.x = -0.5 * Math.PI;
                 mesh.position.x = r;
@@ -98,7 +101,7 @@
                 var points = [];
                 var material = new THREE.MeshBasicMaterial({color: cp, transparent: true});
                 geometry.vertices.forEach(function (point) {
-                    var spGeom = new THREE.SphereGeometry(0.1);
+                    var spGeom = new THREE.SphereGeometry(0.05);
                     var spMesh = new THREE.Mesh(spGeom, material);
 
                     if (points.length == 0) {
@@ -145,7 +148,7 @@
 
         function createSphere() {
             var sphereGeometry = new THREE.SphereGeometry(15, 15, 15);
-            var sphereMaterial = new THREE.MeshBasicMaterial({color: 0xf1F71f, wireframe: true});
+            var sphereMaterial = new THREE.MeshLambertMaterial({color: 0xffc222, wireframe: controls.wireframe});
             sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
             scene.add(sphere);
         }
@@ -177,6 +180,18 @@
             return stats;
         }
 
+        // add subtle ambient lighting
+        var ambiColor = "#0c0c0c";
+        var ambientLight = new THREE.AmbientLight(ambiColor);
+        scene.add(ambientLight);
+
+        // add spotlight for the shadows
+        var spotLight = new THREE.SpotLight(0xffffff);
+        spotLight.position.set(-80, 80, 80);
+        spotLight.castShadow = true;
+        scene.add(spotLight);
+
+
         function render() {
             rotation += 0.005;
             stats.update();
@@ -186,12 +201,14 @@
             camera.lookAt(scene.position);
 
             if(controls.playAnimation) {
-                if (spGroup ) {
+                if (spGroup) {
+                    spGroup.visible = controls.vertices;
                     spGroup.rotation.y += 0.005;
                     spGroup.rotation.x += 0.005;
                 }
 
-                if (spGroupSat ) {
+                if (spGroupSat) {
+                    spGroupSat.visible = controls.vertices;
                     spGroupSat.rotation.y += 0.005;
                     spGroupSat.rotation.x += 0.005;
                 }
@@ -210,6 +227,7 @@
                     group.children.forEach(function(o){
                         o.rotation.y += 0.005;
                         o.rotation.x += 0.005;
+                        o.material.wireframe = controls.wireframe;
                     });
                 }
 
@@ -218,6 +236,7 @@
                     groupSat.children.forEach(function(o){
                         o.rotation.y += 0.005;
                         o.rotation.x += 0.005;
+                        o.material.wireframe = controls.wireframe;
                     });
                 }
 
@@ -225,13 +244,15 @@
                   var delta = clock.getDelta();
                   sphere.rotation.x += 0.5 * delta;
                   sphere.rotation.y += 0.5 * delta;
-                  
+                  sphere.material.wireframe = controls.wireframe;
                   var time = clock.getElapsedTime() * 2;
                   sphere.position.x = Math.cos( time ) * 2;
                   sphere.position.y = Math.sin( time ) * 2 - 0.4;
 
               }
           }
+          // ambientLight.visible = controls.luz;
+          // spotLight.visible = controls.luz;
           axes.visible = controls.visibleAxes;
             requestAnimationFrame(render);
             webGLRenderer.render(scene, camera);
